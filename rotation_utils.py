@@ -55,13 +55,6 @@ def fuse_layer_norms(model):
     W_norm = model.model.norm.weight.data
     model.model.norm.weight.data = torch.ones_like(W_norm)
     
-    # model_utils.replace_modules(
-    #     model,
-    #     transformers.models.llama.modeling_llama.LlamaRMSNorm if model_type == model_utils.LLAMA_MODEL else torch.nn.LayerNorm,
-    #     lambda _: model_utils.RMSN(model.config.hidden_size),
-    #     replace_layers=False,
-    # )
-    
 
 def random_orthogonal_matrix(size, device):
     """
