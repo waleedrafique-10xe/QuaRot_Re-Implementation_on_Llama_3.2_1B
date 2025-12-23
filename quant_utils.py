@@ -4,6 +4,7 @@ import torch
 import utils
 import hadamard_utils
 import torch.nn.functional as F
+import quant_utils
 
 def get_minq_maxq(bits, sym):
     if sym:
@@ -233,17 +234,24 @@ class ActQuantWrapper(torch.nn.Module):
                 x = x.float()
                 
             init_shape = x.shape
-            hadK = hadamard_utils.random_hadamard_matrix(init_shape[-1]//self.had_dim, "cpu").to(torch.float64)
-            # hadK, K = hadamard_utils.get_hadK(init_shape[-1]//self.had_dim)
             if self.K == 1:
                 # x = fast_hadamard_transform.hadamard_transform(x.reshape(-1, init_shape[-1]//self.had_dim, self.had_dim).transpose(1, 2),
                 #                                                scale=1/math.sqrt(init_shape[-1]//self.had_dim)).transpose(1, 2)
 
-                x_reshaped = x.reshape(-1, init_shape[-1]//self.had_dim, self.had_dim).transpose(1, 2)
-                n = init_shape[-1]//self.had_dim
-                # x = F.linear(x_reshaped, torch.tensor(scipy.linalg.hadamard(n)).to(dtype=torch.float64)) / math.sqrt(n)
+                print(f'before reshaping : dim of input matrix is {x.shape}')
+                # modules = [m for idx, m in enumerate(self.module.named_children())]
+                # print(f'name of the module is {modules}')
+                x_reshaped = x.reshape(-1, init_shape[-1]//self.had_dim, self.had_dim).transpose(1, 2) # original
+                # n = init_shape[-1]//self.had_dim # original
+                n = self.had_dim
+
+
+                # hadK = hadamard_utils.random_hadamard_matrix(init_shape[-1]//self.had_dim, "cpu").to(torch.float64) # original
+                hadK = hadamard_utils.random_hadamard_matrix(self.had_dim, "cpu").to(torch.float64)
+
+                print(f'module is {self.module} dim of input matrix is {x_reshaped.shape} and of hadamard matrix is {hadK.shape}')
                 x = ( hadK @ x_reshaped.to(torch.float64) ) / math.sqrt(n)
-                x = x.transpose(1,2)
+                x = x.transpose(1,2) # original
 
             else:
                 x = (self.had_K.to(x.dtype) @ x.reshape(-1, init_shape[-1]//self.had_dim, self.had_dim)) / math.sqrt(init_shape[-1]//self.had_dim)

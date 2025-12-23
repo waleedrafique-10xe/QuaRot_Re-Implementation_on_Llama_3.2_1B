@@ -44,16 +44,23 @@ def fuse_layer_norms(model):
             fuse_ln_linear(layer.input_layernorm, [layer.self_attn.q_proj, layer.self_attn.k_proj, layer.self_attn.v_proj])
         else:
             raise ValueError(f'Unknown model type {model_type}')
+        
+        W_norm = layer.post_attention_layernorm.weight.data
+        layer.post_attention_layernorm.weight.data = torch.ones_like(W_norm)
+        W_norm = layer.input_layernorm.weight.data
+        layer.input_layernorm.weight.data = torch.ones_like(W_norm)
                     
     
     fuse_ln_linear(model_utils.get_pre_head_layernorm(**kwargs), [model_utils.get_lm_head(**kwargs)])
+    W_norm = model.model.norm.weight.data
+    model.model.norm.weight.data = torch.ones_like(W_norm)
     
-    model_utils.replace_modules(
-        model,
-        transformers.models.llama.modeling_llama.LlamaRMSNorm if model_type == model_utils.LLAMA_MODEL else torch.nn.LayerNorm,
-        lambda _: model_utils.RMSN(model.config.hidden_size),
-        replace_layers=False,
-    )
+    # model_utils.replace_modules(
+    #     model,
+    #     transformers.models.llama.modeling_llama.LlamaRMSNorm if model_type == model_utils.LLAMA_MODEL else torch.nn.LayerNorm,
+    #     lambda _: model_utils.RMSN(model.config.hidden_size),
+    #     replace_layers=False,
+    # )
     
 
 def random_orthogonal_matrix(size, device):
@@ -90,7 +97,6 @@ def rotate_embeddings(model, Q: torch.Tensor) -> None:
     model_type = model_utils.model_type_extractor(model)
     for W in model_utils.get_embeddings(model, model_type):
         dtype = W.weight.data.dtype
-        print(f'dtype is {dtype}')
         W_ = W.weight.data.to(device=utils.DEV, dtype=torch.float64)
         W.weight.data = torch.matmul(W_, Q.to(dtype=torch.float64)).to(device="cpu", dtype=dtype)
 
@@ -143,7 +149,7 @@ def rotate_mlp_output(layer, Q, model_type):
     dtype = W.weight.data.dtype
     W_ = W.weight.data.to(device=utils.DEV, dtype=torch.float64)
     W.weight.data = torch.matmul(Q.T.to(dtype=torch.float64), W_).to(device="cpu", dtype=dtype)
-    apply_exact_had_to_linear(W, had_dim=-1, output=False) #apply exact (inverse) hadamard on the weights of mlp output
+    # apply_exact_had_to_linear(W, had_dim=-1, output=False) #apply exact (inverse) hadamard on the weights of mlp output
     if W.bias is not None:
         b = W.bias.data.to(device=utils.DEV, dtype=torch.float64)
         W.bias.data = torch.matmul(Q.T, b).to(device="cpu", dtype=dtype)
@@ -190,7 +196,7 @@ def rotate_model(model):
         rotate_attention_output(layers[idx], Q, model_type)
         rotate_mlp_input(layers[idx], Q, model_type)
         rotate_mlp_output(layers[idx], Q, model_type)
-        rotate_ov_proj(layers[idx], model_type, num_heads, head_dim)
+        #rotate_ov_proj(layers[idx], model_type, num_heads, head_dim)
 
 
 @torch.no_grad()
