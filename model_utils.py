@@ -32,11 +32,12 @@ def get_llama(model_name, hf_token):
     torch.nn.init.kaiming_uniform_ = skip
     torch.nn.init.uniform_ = skip
     torch.nn.init.normal_ = skip
-    model = transformers.LlamaForCausalLM.from_pretrained(model_name, torch_dtype=torch.float32, # waleed  torch_dtype='auto'
+    model = transformers.LlamaForCausalLM.from_pretrained(model_name, torch_dtype='auto', # waleed  torch_dtype='auto'
                                                           use_auth_token=hf_token,
                                                           low_cpu_mem_usage=True)
+    # model.seqlen = 2048 # original
     model.seqlen = 2048
-    logging.info('---> Loading {} Model with seq_len: {}'.format(model_name, model.seqlen))
+    print('---> Loading {} Model with seq_len: {}'.format(model_name, model.seqlen))
     return model
 
 
@@ -59,6 +60,7 @@ def get_model_type(model):
 
 def get_embeddings(model, model_type) -> list[torch.nn.Module]:
     if model_type == LLAMA_MODEL:
+        # print(f'model type is {model_type}')
         return [model.model.embed_tokens]
     else:
         raise ValueError(f'Unknown model type {model_type}')

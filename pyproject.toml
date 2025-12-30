@@ -6,8 +6,10 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "accelerate>=1.12.0",
+    "hadamard-transform>=0.1.3",
     "huggingface-hub>=0.36.0",
-    "torch>=2.9.1",
-    "transformers>=4.57.3",
+    "scipy>=1.15.3",
+    "torch==2.7",
+    "transformers==4.52",
     "wandb>=0.23.1",
 ]

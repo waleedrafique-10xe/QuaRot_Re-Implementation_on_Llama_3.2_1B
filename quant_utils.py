@@ -5,6 +5,8 @@ import utils
 import hadamard_utils
 import torch.nn.functional as F
 import quant_utils
+from hadamard_transform import hadamard_transform
+import scipy
 
 def get_minq_maxq(bits, sym):
     if sym:
@@ -219,10 +221,11 @@ class ActQuantWrapper(torch.nn.Module):
 
         # Rotate, if needed
         if self.online_full_had:
+            print('this is activation wrapper')
             
             if self.fp32_had: # Full Hadamard in FP32
                 # x = hadamard_utils.matmul_hadU_cuda(x.float(), self.had_K, self.K).to(x_dtype)
-                x = hadamard_utils.matmul_hadU(x.float()).to(x_dtype)
+                x = hadamard_utils.matmul_hadU(x.double()).to(x_dtype)
             else: # Full Hadamard in FP16
                 # x = hadamard_utils.matmul_hadU_cuda(x, self.had_K, self.K)
                 x = hadamard_utils.matmul_hadU(x)
@@ -238,20 +241,45 @@ class ActQuantWrapper(torch.nn.Module):
                 # x = fast_hadamard_transform.hadamard_transform(x.reshape(-1, init_shape[-1]//self.had_dim, self.had_dim).transpose(1, 2),
                 #                                                scale=1/math.sqrt(init_shape[-1]//self.had_dim)).transpose(1, 2)
 
+                # x_reshaped = x.squeeze(0)
+                # n = x_reshaped[-1]
+                # print(f'after reshaping : dim of input matrix is {x_reshaped.shape}')
+                # x = hadamard_transform(x_reshaped) # mse = 10.411, 
+                # x = x.unsqueeze(0)
+                # print(f'final shape of x is {x.shape}')
+
                 print(f'before reshaping : dim of input matrix is {x.shape}')
-                # modules = [m for idx, m in enumerate(self.module.named_children())]
-                # print(f'name of the module is {modules}')
-                x_reshaped = x.reshape(-1, init_shape[-1]//self.had_dim, self.had_dim).transpose(1, 2) # original
-                # n = init_shape[-1]//self.had_dim # original
-                n = self.had_dim
+                x_reshaped = x.reshape(-1, init_shape[-1]//self.had_dim, self.had_dim).transpose(1, 2) # original, batch2 tensor to be: [4, 32] but got: [4, 64].
+                # x_reshaped = x.reshape(-1, init_shape[-1]//self.had_dim, self.had_dim)
+                # x_reshaped = x.reshape(-1, init_shape[-1]//self.had_dim, init_shape[-1]//self.had_dim).transpose(1, 2) # mse is 25.64, 22.28, 26.44
+                n = init_shape[-1]//self.had_dim # original
+                # n = self.had_dim # mse = 32.526771545410156, 28.5916805267334
 
 
-                # hadK = hadamard_utils.random_hadamard_matrix(init_shape[-1]//self.had_dim, "cpu").to(torch.float64) # original
-                hadK = hadamard_utils.random_hadamard_matrix(self.had_dim, "cpu").to(torch.float64)
+                # # hadK = hadamard_utils.random_hadamard_matrix(init_shape[-1]//self.had_dim, "cpu").to(torch.float64) # original
+                # hadK = hadamard_utils.random_hadamard_matrix(n, "cpu").to(torch.float64) # original
 
-                print(f'module is {self.module} dim of input matrix is {x_reshaped.shape} and of hadamard matrix is {hadK.shape}')
-                x = ( hadK @ x_reshaped.to(torch.float64) ) / math.sqrt(n)
-                x = x.transpose(1,2) # original
+
+                # # # Expand hadK to have batch dimension
+                # # H_expanded = hadK.unsqueeze(0).expand(4, 32, 32)  # (4, 32, 32)
+                # # x   = torch.bmm(H_expanded, x_reshaped.transpose(1, 2).double())  # (4, 32, 64 : mse = 22.17, 33.705)
+
+
+                # print(f'hadamard matrix is {hadK.shape} and dim of input matrix is {x_reshaped.shape}')
+                # x = ( hadK @ x_reshaped.to(torch.float64) ) # original
+                # # x = (  x_reshaped.to(torch.float64) @ hadK) # mse = 33.771366119384766, 23.16571044921875
+                # x = x.transpose(1,2) # original
+                
+                # hadamard_matrix = torch.tensor(scipy.linalg.c(n)).to(dtype=torch.float64)
+                hadamard_matrix = hadamard_utils.random_hadamard_matrix(n, "cpu").to(torch.float64)
+                hadamard_matrix = hadamard_matrix.unsqueeze(0).expand(x_reshaped.shape[0],-1,-1)
+                # hadamard_matrix = hadamard_matrix.transpose(1,2)
+                print(f'shape if input matrix is {x_reshaped.shape} and hadamard matrix is {hadamard_matrix.shape}')
+
+                # x = F.linear(x_reshaped.to(dtype=torch.float64), hadamard_matrix) / math.sqrt(n) # RuntimeError: t() expects a tensor with <= 2 dimensions, but self is 3D
+                x = (x_reshaped.to(dtype=torch.float64) @ hadamard_matrix)
+                x = x.transpose(1,2)
+                print(f'final shape of x is {x.shape}')
 
             else:
                 x = (self.had_K.to(x.dtype) @ x.reshape(-1, init_shape[-1]//self.had_dim, self.had_dim)) / math.sqrt(init_shape[-1]//self.had_dim)

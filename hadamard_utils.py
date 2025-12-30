@@ -84,10 +84,10 @@ def matmul_hadUt(X):
 
 def random_hadamard_matrix(size, device):
     # See https://cornell-relaxml.github.io/quip-sharp/ , Section "Randomized Hadamard Transformation"
-    Q = torch.randint(low=0, high=2, size=(size,)).to(torch.float64)
+    Q = torch.randint(low=0, high=2, size=(size,), dtype=torch.float64).to(torch.float64)
     Q = Q * 2 - 1
     Q = torch.diag(Q)
-    return matmul_hadU(Q).to(device)
+    return matmul_hadU(Q).to(device, dtype=torch.float64)
 
 def hadamard_matrix(size, device):
     # See https://cornell-relaxml.github.io/quip-sharp/ , Section "Randomized Hadamard Transformation"
@@ -121,11 +121,11 @@ def apply_exact_had_to_linear(module, had_dim=-1, output=False):
             W_ = matmul_hadU(W_)
     else:
         # Apply Hadamard to the last had_dim chunks of the weights
-        print(f'had_dim is {had_dim}')
+        print(f'had_dim is {had_dim} and  x is {W_.shape}')
         hadK = random_hadamard_matrix(had_dim, "cpu").to(torch.float64)
         # hadK, K = get_hadK(had_dim)
         if output:
-            W_ = W_.t()
+            W_ = W_.t() # original
             transposed_shape = W_.shape
             # W_ = fast_hadamard_transform.hadamard_transform(
             #     W_.reshape(-1, transposed_shape[-1]//had_dim, had_dim),
@@ -138,13 +138,14 @@ def apply_exact_had_to_linear(module, had_dim=-1, output=False):
             # W_ = W_.reshape(transposed_shape).t()
 
             temp = W_.reshape(-1, transposed_shape[-1]//had_dim, had_dim)
-            temp = ( temp.to(torch.float64) @ hadK) / math.sqrt(had_dim) # i added :  / math.sqrt(had_dim)
+            temp = ( temp.to(torch.float64) @ hadK)
             W_ = temp.reshape(transposed_shape).t()
 
         else:
-            raise NotImplementedError("Not implemented (or tested) yet!")
-            n = W_.shape[1]
-            W_ = hadamard_transform(W_.reshape(-1, n//had_dim, had_dim), scale=1/math.sqrt(had_dim)).reshape(init_shape)
+            init_shape = W_.shape
+            temp = W_.reshape(-1, init_shape[-1] // had_dim, had_dim)
+            temp = temp.to(torch.float64) @ hadK
+            W_ = temp.reshape(init_shape)
     module.weight.data = W_.to(device=dev, dtype=dtype)
 
 
