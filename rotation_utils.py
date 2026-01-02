@@ -7,6 +7,11 @@ import tqdm
 import quant_utils
 from hadamard_utils import random_hadamard_matrix, apply_exact_had_to_linear, is_pow2
 import torch.nn.functional as F
+# import matplotlib
+# import matplotlib.pyplot as plt
+# matplotlib.use('TKAgg')
+
+
 
 def fuse_ln_linear(layernorm: torch.nn.Module, linear_layers: typing.Iterable[torch.nn.Linear]) -> None:
     """
@@ -215,6 +220,10 @@ def rotate_model(model):
         rotate_mlp_output(layers[idx], Q, model_type)
         # rotate_ov_proj(layers[idx], model_type, num_heads, head_dim)
 
+    # backend = matplotlib.get_backend()
+    # print(f'\n\n\n\n\nbackend is {backend}\n\n\n\n\n')
+    # plt.plot(layers[0].mlp.down_proj.weight.data)
+    # plt.show()
 
 @torch.no_grad()
 def online_rotate(module, inp):
