@@ -158,7 +158,7 @@ print('Linting and recompiling successful')
 print(exported_program.graph.print_tabular())
 
 output = model(**inputs, pad_token_id=tokenizer.eos_token_id)
-print(f'\n\n\n output is : {output.logits}')
+print(f'\n\n\n pre rotated graph output is : {output.logits}')
 
 converted_model_response = exported_program.module()(inputs.input_ids, inputs.attention_mask)
 print(f'\n\n\n converted graph output is {converted_model_response}')
