@@ -8,8 +8,8 @@ import quant_utils
 from hadamard_utils import random_hadamard_matrix, apply_exact_had_to_linear, is_pow2
 import torch.nn.functional as F
 # import matplotlib
-# import matplotlib.pyplot as plt
 # matplotlib.use('TKAgg')
+# import matplotlib.pyplot as plt
 
 
 
@@ -95,13 +95,7 @@ def rotate_embeddings(model, Q: torch.Tensor) -> None:
     model_type = model_utils.model_type_extractor(model)
     for W in model_utils.get_embeddings(model, model_type):
         dtype = W.weight.data.dtype
-        # print(f'shape of embeddings is {W.weight.data.shape}')
-        # print(f'shape of orthognal matrix is {Q.shape}')
-        # W_ = W.weight.data.to(device=utils.DEV, dtype=torch.float64) # original
-        # W.weight.data = torch.matmul(W_, Q.to(dtype=torch.float64)).to(device="cpu", dtype=dtype) # original
         W_ = W.weight.data.to(device='cpu', dtype=torch.float64)
-        # print(f'embedding weight matrix is {W_}')
-        # print(f'orthogonal weight matrix is {Q}')
         W.weight.data = torch.matmul(W_, Q.to(device='cpu', dtype=torch.float64)).to(device="cpu", dtype=dtype)
 
     
@@ -109,15 +103,7 @@ def rotate_attention_inputs(layer, Q, model_type) -> None:
     # Rotate the WQ, WK and WV matrices of the self-attention layer.
     for W in [layer.self_attn.q_proj, layer.self_attn.k_proj, layer.self_attn.v_proj]:
         dtype = W.weight.dtype
-        # print(f'shape of attention input is {W.weight.data.shape}')
-        # print(f'shape of orthognal matrix is {Q.shape}')
-        # W_ = W.weight.to(device=utils.DEV, dtype=torch.float64) # original
-        # W.weight.data = torch.matmul(W_, Q.to(dtype=torch.float64)).to(device="cpu", dtype=dtype) # original
         W_ = W.weight.to(device='cpu', dtype=torch.float64)
-        
-        # if W == layer.self_attn.q_proj:
-        #     print(f'q_proj attention weight matrix is {W_}')
-        #     print(f'orthogonal weight matrix is {Q}')
         W.weight.data = torch.matmul(W_, Q.to(device='cpu', dtype=torch.float64)).to(device="cpu", dtype=dtype)
 
 def rotate_attention_output(layer, Q, model_type) -> None:
@@ -128,9 +114,6 @@ def rotate_attention_output(layer, Q, model_type) -> None:
         W = layer.self_attn.out_proj
     else:
         raise ValueError(f'Unknown model type {model_type}')
-    
-    # print(f'shape of attention output is {W.weight.data.shape}')
-    # print(f'shape of orthognal matrix is {Q.shape}')
 
     dtype = W.weight.data.dtype
     W_ = W.weight.data.to(device=utils.DEV, dtype=torch.float64)
@@ -148,8 +131,6 @@ def rotate_mlp_input(layer, Q, model_type):
     else:
         raise ValueError(f'Unknown model type {model_type}')
     for W in mlp_inputs:
-        # print(f'shape of mlp input is {W.weight.data.shape}')
-        # print(f'shape of orthognal matrix is {Q.shape}')
         dtype = W.weight.dtype
         W_ = W.weight.data.to(device=utils.DEV, dtype=torch.float64)
         W.weight.data = torch.matmul(W_, Q.to(dtype=torch.float64)).to(device="cpu", dtype=dtype) # original
@@ -163,8 +144,6 @@ def rotate_mlp_output(layer, Q, model_type):
     else:
         raise ValueError(f'Unknown model type {model_type}')
     
-    # print(f'shape of mlp output is {W.weight.data.shape}')
-    # print(f'shape of orthognal matrix is {Q.shape}')
     dtype = W.weight.data.dtype
     W_ = W.weight.data.to(device=utils.DEV, dtype=torch.float64)
     W.weight.data = torch.matmul(Q.T.to(dtype=torch.float64), W_).to(device="cpu", dtype=dtype) # original
@@ -177,8 +156,6 @@ def rotate_head(model, Q: torch.Tensor) -> None:
     # Rotate the head.
     W = model_utils.get_lm_head(model, model_type=model_utils.model_type_extractor(model))
     dtype = W.weight.data.dtype
-    # print(f'shape of head is {W.weight.data.shape}')
-    # print(f'shape of orthognal matrix is {Q.shape}')
     W_ = W.weight.data.to(device=utils.DEV, dtype=torch.float64)
     W.weight.data = torch.matmul(W_, Q).to(device="cpu", dtype=dtype) # original
 
@@ -198,6 +175,15 @@ def rotate_ov_proj(layer, model_type, head_num, head_dim):
 
 @torch.no_grad()
 def rotate_model(model):
+    # If below code is nwo showing graph at your end then you need to include following in your .ssh/config file
+    # ForwardX11 yes
+    # ForwardX11Trusted yes
+
+    # layers = model.model.layers
+    # print(f'shape of tensor is {layers[0].mlp.down_proj.weight.data.shape} and type is {type(layers[0].mlp.down_proj.weight.data)}\n\n\n\n')
+    # plt.imshow(layers[0].mlp.down_proj.weight.data)
+    # plt.show()
+
     Q = get_orthogonal_matrix(model.config.hidden_size)
 
     config = model.config
@@ -219,11 +205,6 @@ def rotate_model(model):
         rotate_mlp_input(layers[idx], Q, model_type)
         rotate_mlp_output(layers[idx], Q, model_type)
         # rotate_ov_proj(layers[idx], model_type, num_heads, head_dim)
-
-    # backend = matplotlib.get_backend()
-    # print(f'\n\n\n\n\nbackend is {backend}\n\n\n\n\n')
-    # plt.plot(layers[0].mlp.down_proj.weight.data)
-    # plt.show()
 
 @torch.no_grad()
 def online_rotate(module, inp):
